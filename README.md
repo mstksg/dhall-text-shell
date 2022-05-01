@@ -1,9 +1,10 @@
 dhall-text-shell
 ================
 
-`dhall-text-shell` requires the expression to be `Text`.  But what if it was able to
-also render expressions of type `(Text -> Text) -> Text`, and be given a shell
-argument as the `Text -> Text` ?
+`dhall text` and `dhall to-directory-tree` require the expression (or file
+leaves) to be `Text`.  But what if it was able to also render expressions of
+type `(Text -> Text) -> Text` (or `(Text -> Text) -> directory tree`), and be
+given a shell argument as the `Text -> Text` ?
 
 ```dhall
 -- testfile.dhall
@@ -60,3 +61,7 @@ program on that ffi function.
 Note that for this to work meaningfully, your shell command must be "pure": it
 must return the same stdout for any stdin, and shouldn't observably affect the
 world every time it is run.
+
+This also supports `dhall to-directory-tree` as well with a `--directory-tree`
+flag, and in a similar fashion it takes a function `(Text -> Text) ->
+(directory tree record)`, to be supplied the shell function.

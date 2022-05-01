@@ -1,11 +1,12 @@
 cabal-version:       2.4
 name:                dhall-text-shell
-version:             0.1.0.0
+version:             0.2.0.0
 synopsis:            Render dhall text with shell commands as function arguments
 description:
-    `dhall-text-shell` requires the expression to be `Text`.  But what if it was able to
-    also render expressions of type `(Text -> Text) -> Text`, and be given a shell
-    argument as the `Text -> Text` ?
+    `dhall text` and `dhall to-directory-tree` require the expression (or file
+    leaves) to be `Text`.  But what if it was able to also render expressions
+    of type `(Text -> Text) -> Text` (or `(Text -> Text) -> directory tree`),
+    and be given a shell argument as the `Text -> Text` ?
     .
     This is essentially a very minimal "FFI" for dhall, since it doesn't require
     extending anything in the language.  It just requires you to parameterize your

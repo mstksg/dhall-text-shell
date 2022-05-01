@@ -5,9 +5,9 @@
 
 module Dhall.TextShell (main) where
 
-import Control.Exception (Handler (..), SomeException)
-import Control.Monad (foldM)
 import Control.Applicative (optional)
+import Control.Exception (Handler (..), SomeException)
+import Control.Monad (foldM, unless, void)
 import Data.Text (Text)
 import Data.Void (Void)
 import Dhall.Core (Expr(Annot))
@@ -23,6 +23,7 @@ import qualified Data.Text
 import qualified Data.Text.IO
 import qualified Dhall
 import qualified Dhall.Core
+import qualified Dhall.DirectoryTree as DirectoryTree
 import qualified Dhall.Import
 import qualified Dhall.TypeCheck
 import qualified Dhall.Util
@@ -30,6 +31,7 @@ import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified System.FilePath
 import qualified System.IO
+import qualified System.IO.Error
 import qualified System.Process
 
 -- | Options from general dhall tools
@@ -42,6 +44,7 @@ data AsCommand = AsCommand
 data Options = Options
     { file    :: Input
     , output  :: Output
+    , asDirectoryTree :: Bool
     , argCmds :: [String]
     }
 
@@ -58,6 +61,7 @@ parseConfig = (,) <$> parseOptions
     parseOptions =
       Options   <$> parseFile
                 <*> parseOutput
+                <*> parseAsDirectoryTree
                 <*> Options.Applicative.many parseArgCmd
     parseFile = fmap f (optional p)
       where
@@ -81,6 +85,8 @@ parseConfig = (,) <$> parseOptions
                 <>  Options.Applicative.metavar "FILE"
                 <>  Options.Applicative.action "file"
                 )
+    parseAsDirectoryTree = switch "directory-tree"
+        "Create a directory tree a la dhall to-directory-tree instead of a single file"
     parseArgCmd = Options.Applicative.strOption
             (   Options.Applicative.long "argCmd"
             <>  Options.Applicative.help "Use shell command to supply as `Text -> Text` argument"
@@ -112,27 +118,35 @@ runWithOptions ac Options{..} = asCommand ac $ \getExpression rootDirectory -> d
     resolvedExpression <-
         Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
 
-    let addPiLayer :: Expr Src Void -> Expr Src Void
-        addPiLayer = Dhall.Core.Pi
-          Nothing "_"
-          (Dhall.Core.Pi Nothing "_" Dhall.Core.Text Dhall.Core.Text)
-        expectedType = iterate addPiLayer Dhall.Core.Text !! length argCmds
-    _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf (Annot resolvedExpression expectedType))
+    case asDirectoryTree of
+      False -> do
+         let addPiLayer :: Expr Src Void -> Expr Src Void
+             addPiLayer = Dhall.Core.Pi
+               Nothing "_"
+               (Dhall.Core.Pi Nothing "_" Dhall.Core.Text Dhall.Core.Text)
+             expectedType = iterate addPiLayer Dhall.Core.Text !! length argCmds
+         void $ Dhall.Core.throws (Dhall.TypeCheck.typeOf (Annot resolvedExpression expectedType))
+      True  -> case output of
+        StandardOutput -> Control.Exception.throwIO $
+          System.IO.Error.userError "Usage of --directory-tree requires --output to be specified"
+        OutputFile _ -> pure ()
 
     let normalizedExpression = Dhall.Core.normalize resolvedExpression
         peelArg :: (Expr Void Void, Data.Map.Map Text [String])
                 -> String
-                -> Maybe (Expr Void Void, Data.Map.Map Text [String])
+                -> Either (Expr Void Void) (Expr Void Void, Data.Map.Map Text [String])
         peelArg (currExp, currMap) arg = case currExp of
           Dhall.Core.Lam _ (Dhall.Core.FunctionBinding { functionBindingVariable }) subExp ->
-            Just (subExp, Data.Map.insertWith (++) functionBindingVariable [arg] currMap)
-          _ -> Nothing
+            Right (subExp, Data.Map.insertWith (++) functionBindingVariable [arg] currMap)
+          e -> Left e
         peeledExprAndMap =
             foldM peelArg (normalizedExpression, Data.Map.empty) argCmds
 
     case peeledExprAndMap of
-      Nothing -> pure () -- this should have been caught during the typecheck
-      Just (expr, argMap) -> do
+      Left e
+        | asDirectoryTree -> Control.Exception.throwIO $ DirectoryTree.FilesystemError e
+        | otherwise       -> pure () -- this should have been caught during the typecheck
+      Right (expr, argMap) -> do
         res <- Dhall.Core.normalizeWithM
           (\x -> case x of
             Dhall.Core.App (Dhall.Core.Var (Dhall.Core.V v i))
@@ -147,20 +161,25 @@ runWithOptions ac Options{..} = asCommand ac $ \getExpression rootDirectory -> d
             _ -> pure Nothing
           )
           expr
-        case res of
-          Dhall.Core.TextLit (Dhall.Core.Chunks [] text) ->
-              let write = case output of
-                    StandardOutput -> Data.Text.IO.putStr
-                    OutputFile file_ -> Data.Text.IO.writeFile file_
-              in write text
-          _ -> do
-              let invalidDecoderExpected :: Expr Void Void
-                  invalidDecoderExpected = Dhall.Core.Text
+        case asDirectoryTree of
+          False -> case res of
+            Dhall.Core.TextLit (Dhall.Core.Chunks [] text) ->
+                let write = case output of
+                      StandardOutput -> Data.Text.IO.putStr
+                      OutputFile file_ -> Data.Text.IO.writeFile file_
+                in write text
+            _ -> do
+                let invalidDecoderExpected :: Expr Void Void
+                    invalidDecoderExpected = Dhall.Core.Text
 
-              let invalidDecoderExpression :: Expr Void Void
-                  invalidDecoderExpression = res
+                let invalidDecoderExpression :: Expr Void Void
+                    invalidDecoderExpression = res
 
-              Control.Exception.throwIO (Dhall.InvalidDecoder {..})
+                Control.Exception.throwIO (Dhall.InvalidDecoder {..})
+          True -> case output of
+            StandardOutput -> Control.Exception.throwIO  $
+              System.IO.Error.userError "Usage of --directory-tree requires --output to be specified"
+            OutputFile file_ -> DirectoryTree.toDirectoryTree file_ res
 
 -- | Copy as much as possible the setup in "Dhall.Main".  If that module
 -- changes, this should update as well.
