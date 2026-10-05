@@ -4,6 +4,10 @@ Changelog
 Version 0.2.1.0
 ---------------
 
+*October 4, 2026*
+
+<https://github.com/mstksg/dhall-text-shell/releases/tag/v0.2.1.0>
+
 *   Fix build against recent `dhall` releases, where
     `Dhall.DirectoryTree.toDirectoryTree` gained a leading `Bool` argument
     for whether to allow path separators in file names.  Added a matching
