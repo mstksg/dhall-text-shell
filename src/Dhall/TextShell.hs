@@ -45,6 +45,7 @@ data Options = Options
     { file    :: Input
     , output  :: Output
     , asDirectoryTree :: Bool
+    , allowPathSeparators :: Bool
     , argCmds :: [String]
     }
 
@@ -62,6 +63,7 @@ parseConfig = (,) <$> parseOptions
       Options   <$> parseFile
                 <*> parseOutput
                 <*> parseAsDirectoryTree
+                <*> parseAllowPathSeparators
                 <*> Options.Applicative.many parseArgCmd
     parseFile = fmap f (optional p)
       where
@@ -87,6 +89,8 @@ parseConfig = (,) <$> parseOptions
                 )
     parseAsDirectoryTree = switch "directory-tree"
         "Create a directory tree a la dhall to-directory-tree instead of a single file"
+    parseAllowPathSeparators = switch "allow-path-separators"
+        "Whether to allow path separators in file names"
     parseArgCmd = Options.Applicative.strOption
             (   Options.Applicative.long "argCmd"
             <>  Options.Applicative.help "Use shell command to supply as `Text -> Text` argument"
@@ -179,7 +183,7 @@ runWithOptions ac Options{..} = asCommand ac $ \getExpression rootDirectory -> d
           True -> case output of
             StandardOutput -> Control.Exception.throwIO  $
               System.IO.Error.userError "Usage of --directory-tree requires --output to be specified"
-            OutputFile file_ -> DirectoryTree.toDirectoryTree file_ res
+            OutputFile file_ -> DirectoryTree.toDirectoryTree allowPathSeparators file_ res
 
 -- | Copy as much as possible the setup in "Dhall.Main".  If that module
 -- changes, this should update as well.

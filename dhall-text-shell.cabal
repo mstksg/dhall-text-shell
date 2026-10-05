@@ -1,6 +1,6 @@
 cabal-version:       2.4
 name:                dhall-text-shell
-version:             0.2.0.0
+version:             0.2.1.0
 synopsis:            Render dhall text with shell commands as function arguments
 description:
     `dhall text` and `dhall to-directory-tree` require the expression (or file

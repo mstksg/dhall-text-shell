@@ -1,6 +1,15 @@
 Changelog
 =========
 
+Version 0.2.1.0
+---------------
+
+*   Fix build against recent `dhall` releases, where
+    `Dhall.DirectoryTree.toDirectoryTree` gained a leading `Bool` argument
+    for whether to allow path separators in file names.  Added a matching
+    `--allow-path-separators` flag (off by default, mirroring `dhall
+    to-directory-tree`).
+
 Version 0.2.0.0
 ---------------
 
